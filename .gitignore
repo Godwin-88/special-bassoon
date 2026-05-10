@@ -1,0 +1,68 @@
+# --- System / OS ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+auth.json
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.classpath
+.project
+.settings/
+.factorypath
+
+# --- Rust ---
+/target/
+**/*.rs.bk
+# Note: Cargo.lock is committed for applications to ensure reproducible builds
+
+# --- Node.js / Next.js ---
+**/node_modules/
+**/dist/
+**/build/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts
+.vercel/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/.pnpm-debug.log*
+**/*.tsbuildinfo
+
+# --- Python ---
+venv/
+env/
+.env/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Logs & Temp ---
+*.log
+tmp/
+temp/
+/home/ed/.gemini/tmp/solfest/
+
+# --- Project Specific ---
+.claude/settings.local.json
+embeddings.json

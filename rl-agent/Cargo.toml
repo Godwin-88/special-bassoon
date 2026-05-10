@@ -1,0 +1,38 @@
+[package]
+name = "rl-agent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+[dependencies]
+solfest_core = { package = "solfest-core", path = "../solfest-core" }
+data-pipeline = { path = "../data-pipeline" }
+neo4j-graph = { path = "../neo4j-graph" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+ndarray = { workspace = true }
+ndarray-stats = { workspace = true }
+nalgebra = { workspace = true }
+argmin = { workspace = true }
+petgraph = { workspace = true }
+pyo3 = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+chrono.workspace = true
+clap = { workspace = true }
+rand = "0.8"
+itertools = "0.10"
+reqwest = { workspace = true }
+
+[features]
+torch = ["tch"]
+
+[dependencies.tch]
+workspace = true
+optional = true
+

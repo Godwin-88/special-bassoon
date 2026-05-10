@@ -1,0 +1,21 @@
+[package]
+name = "execution-engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+solfest_core = { package = "solfest-core", path = "../solfest-core" }
+data-pipeline = { path = "../data-pipeline" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+solana-sdk.workspace = true
+solana-client.workspace = true
+reqwest.workspace = true

@@ -1,0 +1,65 @@
+
+[workspace]
+members = [
+    "solfest-core",
+    "data-pipeline",
+    "neo4j-graph",
+    "rl-agent",
+    "execution-engine",
+    "api",
+]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["QuantiNova Team"]
+license = "MIT"
+
+[workspace.dependencies]
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "json", "chrono"] }
+ndarray = { version = "0.15", features = ["serde"] }
+ndarray-stats = "0.5"
+neo4rs = "0.7"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["serde", "v4"] }
+futures = "0.3"
+async-trait = "0.1"
+
+# Solana ecosystem
+solana-sdk = "1.18"
+solana-client = "1.18"
+
+# HTTP client
+reqwest = { version = "0.11", features = ["json"] }
+hyper = "0.14"
+axum = "0.7"
+
+# ML/RL (PyO3 for Rust-Python bridge, Candle for inference, tch for training)
+pyo3 = { version = "0.21", features = ["full"] }
+tch = "0.14"
+candle-core = "0.8.0"
+candle-nn = "0.8.0"
+candle-transformers = "0.8.0"
+
+# Numerical Stack
+nalgebra = "0.32"
+argmin = "0.9"
+rand_distr = "0.4"
+petgraph = "0.6"
+
+# Config
+dotenv = "0.15"
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+config = "0.13"
+

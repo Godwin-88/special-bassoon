@@ -1,0 +1,27 @@
+[package]
+name = "data-pipeline"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+solfest_core = { package = "solfest-core", path = "../solfest-core" }
+neo4j-graph = { path = "../neo4j-graph" }
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+# sqlx = { workspace = true }  # Temporarily disabled to resolve conflicts
+reqwest.workspace = true
+ndarray.workspace = true
+chrono.workspace = true
+solana-client.workspace = true
+solana-sdk.workspace = true
+
+[[bin]]
+name = "embed_data"
+path = "bin/embed_data.rs"
