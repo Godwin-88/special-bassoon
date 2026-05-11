@@ -232,23 +232,70 @@ impl Rng {
 }
 
 /// GBM correlated return matrix: shape [days][n_assets].
+///
+/// For n ≤ 120 assets uses a full n×n Cholesky (exact).
+/// For n > 120 uses a cluster factor model (O(n) per day vs O(n³) Cholesky setup):
+///   r_i = sqrt(h²) · (cluster-level factor correlated via 8×8 Cholesky)
+///         + sqrt(1−h²) · idiosyncratic noise
+/// h² = 0.60 (systematic communality), preserving cross-cluster and within-cluster
+/// correlation structure at a tiny fraction of the compute cost.
 pub fn generate_returns(assets: &[WorkAsset], days: usize, seed: u32) -> Vec<Vec<f64>> {
     let n = assets.len();
-    let clusters: Vec<usize> = assets.iter().map(|a| a.cluster).collect();
-    let l = cholesky(&clusters);
-    let mut rng = Rng::new(seed);
     let dt: f64 = 1.0 / 252.0;
     let sqrt_dt = dt.sqrt();
 
-    (0..days).map(|_| {
-        let z: Vec<f64> = (0..n).map(|_| rng.normal()).collect();
-        let corr_z: Vec<f64> = (0..n).map(|i| {
-            (0..=i).map(|j| l[i][j] * z[j]).sum::<f64>()
+    if n <= 120 {
+        // Full Cholesky — exact for small/medium universes
+        let clusters: Vec<usize> = assets.iter().map(|a| a.cluster).collect();
+        let l = cholesky(&clusters);
+        let mut rng = Rng::new(seed);
+        return (0..days).map(|_| {
+            let z: Vec<f64> = (0..n).map(|_| rng.normal()).collect();
+            let corr_z: Vec<f64> = (0..n).map(|i| {
+                (0..=i).map(|j| l[i][j] * z[j]).sum::<f64>()
+            }).collect();
+            (0..n).map(|i| {
+                let mu = assets[i].mu;
+                let sigma = assets[i].sigma;
+                (mu - 0.5 * sigma * sigma) * dt + sigma * sqrt_dt * corr_z[i]
+            }).collect()
         }).collect();
+    }
+
+    // Factor model for large universes: 8 cluster factors + idiosyncratic noise
+    const H2: f64 = 0.60;  // systematic communality (fraction of variance from cluster factors)
+    let h = H2.sqrt();
+    let idio = (1.0 - H2).sqrt();
+
+    // Unique clusters present in this universe (max 8)
+    let mut unique_clusters: Vec<usize> = assets.iter().map(|a| a.cluster).collect::<std::collections::HashSet<_>>().into_iter().collect();
+    unique_clusters.sort_unstable();
+    let nc = unique_clusters.len();
+
+    // Map cluster id → index in factor vector
+    let cluster_idx: std::collections::HashMap<usize, usize> = unique_clusters.iter().enumerate().map(|(i, &c)| (c, i)).collect();
+
+    // 8×8 (or nc×nc) Cholesky for the factor correlation matrix
+    let factor_l = cholesky(&unique_clusters);
+
+    let mut rng = Rng::new(seed);
+
+    (0..days).map(|_| {
+        // Draw nc factor innovations and correlate them
+        let zf: Vec<f64> = (0..nc).map(|_| rng.normal()).collect();
+        let f: Vec<f64> = (0..nc).map(|i| {
+            (0..=i).map(|j| factor_l[i][j] * zf[j]).sum::<f64>()
+        }).collect();
+
+        // Draw per-asset idiosyncratic innovations
+        let ze: Vec<f64> = (0..n).map(|_| rng.normal()).collect();
+
         (0..n).map(|i| {
             let mu = assets[i].mu;
             let sigma = assets[i].sigma;
-            (mu - 0.5 * sigma * sigma) * dt + sigma * sqrt_dt * corr_z[i]
+            let ci = cluster_idx[&assets[i].cluster];
+            let corr_z = h * f[ci] + idio * ze[i];
+            (mu - 0.5 * sigma * sigma) * dt + sigma * sqrt_dt * corr_z
         }).collect()
     }).collect()
 }

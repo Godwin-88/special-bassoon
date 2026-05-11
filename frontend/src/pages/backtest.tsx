@@ -1,9 +1,10 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import {
   LineChart, Line, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
+import MarkdownRenderer from '@/components/MarkdownRenderer'
 
 // ─── Types that mirror Rust SimRequest / SimResult ───────────────────────────
 
@@ -168,6 +169,90 @@ export function isTopNApplicable(universe: UniverseId, assetTypes: AssetType[]):
   return universe !== 'web3_defi'
 }
 
+// ─── Metric tooltip definitions ──────────────────────────────────────────────
+
+const METRIC_DEFS: Record<string, { title: string; formula: string; interpretation: string }> = {
+  'Ann. Ret': {
+    title: 'Annualised Return',
+    formula: '(1 + R_total)^(252 / T) − 1',
+    interpretation: 'Geometric compound return scaled to one calendar year. T = trading days in simulation.',
+  },
+  'Sharpe': {
+    title: 'Sharpe Ratio (ex-ante, rf = 5%)',
+    formula: '(μ_excess × 252) / (σ_daily × √252)',
+    interpretation: 'Risk-adjusted excess return per unit of total volatility. > 1.0 = institutionally acceptable; > 2.0 = exceptional.',
+  },
+  'Sortino': {
+    title: 'Sortino Ratio',
+    formula: '(μ_excess × 252) / (σ_downside × √252)',
+    interpretation: 'Like Sharpe but penalises only downside deviation. Sortino >> Sharpe signals asymmetric payoff profile (large wins, small losses).',
+  },
+  'Max DD': {
+    title: 'Maximum Drawdown',
+    formula: 'max_t [(peak_t − NAV_t) / peak_t]',
+    interpretation: 'Largest peak-to-trough NAV decline on any sub-path. Path-dependent; must be paired with Calmar to assess recoverability.',
+  },
+  'Calmar': {
+    title: 'Calmar Ratio',
+    formula: 'Ann. Return / |Max Drawdown|',
+    interpretation: '> 1.0 = strategy earns more than its worst drawdown per year. The minimum institutional allocation threshold.',
+  },
+  'Vol': {
+    title: 'Annualised Volatility',
+    formula: 'σ_daily × √252',
+    interpretation: 'Standard deviation of daily portfolio returns scaled to annual frequency. Includes both upside and downside variance.',
+  },
+  'Win%': {
+    title: 'Win Rate',
+    formula: 'count(daily_ret > 0) / T',
+    interpretation: 'Fraction of positive-return trading days. Sub-50% is viable if paired with positive skew (rare large wins).',
+  },
+  'ES 95%': {
+    title: 'Expected Shortfall (CVaR) at 95%',
+    formula: 'E[−R | R < VaR_95]',
+    interpretation: 'Average loss on the worst 5% of trading days. Coherent risk measure; used by Basel III and institutional risk committees. More informative than VaR alone.',
+  },
+  'Jump VaR': {
+    title: 'Jump-Adjusted VaR 95% (Spadafora et al. arXiv:1803.07021)',
+    formula: 'VaR decomposed via Merton jump-diffusion: σ_diffusive + Poisson(λ) compound jumps',
+    interpretation: 'Separates diffusive (hedgeable with delta) from jump (requires gamma/vega or tail protection) risk in the 1-day 95% loss estimate.',
+  },
+  'Jump %': {
+    title: 'Jump Variance Fraction',
+    formula: 'σ²_jump / (σ²_diffusive + σ²_jump)',
+    interpretation: 'Fraction of total return variance driven by discontinuous jump events. > 40% = strategy risk profile dominated by regime shifts and liquidity gaps, not continuous drift.',
+  },
+  'Turnover': {
+    title: 'Annualised Portfolio Turnover',
+    formula: 'mean(Σ|Δw_i|) × 252  [expressed as portfolio turns/year]',
+    interpretation: '1x = full portfolio replaced once per year. High turnover (> 10x) severely erodes live Sharpe; assume 10–30 bps all-in cost per turn for institutional execution.',
+  },
+}
+
+function MetricTh({ col, className = '' }: { col: string; className?: string }) {
+  const [show, setShow] = useState(false)
+  const def = METRIC_DEFS[col]
+  const ref = useRef<HTMLTableCellElement>(null)
+
+  return (
+    <th
+      ref={ref}
+      className={`py-2 pr-3 text-right relative select-none ${def ? 'cursor-help underline decoration-dotted decoration-gray-400' : ''} ${className}`}
+      onMouseEnter={() => def && setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      {col}
+      {show && def && (
+        <div className="absolute z-50 right-0 top-full mt-1 w-72 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-xl p-3 text-left pointer-events-none">
+          <p className="font-semibold text-xs text-gray-900 dark:text-white mb-1">{def.title}</p>
+          <p className="font-mono text-[10px] text-indigo-600 dark:text-indigo-400 mb-1.5 bg-indigo-50 dark:bg-indigo-950/50 rounded px-1.5 py-0.5">{def.formula}</p>
+          <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">{def.interpretation}</p>
+        </div>
+      )}
+    </th>
+  )
+}
+
 function exportCSV(runs: StrategyRun[]) {
   const done = runs.filter(r => r.result?.metrics) as (StrategyRun & { result: SimResult })[]
   if (!done.length) return
@@ -298,6 +383,9 @@ export default function BacktestPage() {
   const [paramValues, setParamValues] = useState<Partial<Record<StrategyId, Record<string, number>>>>({})
   const [runs, setRuns]           = useState<StrategyRun[]>([])
   const [loading, setLoading]     = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState<string>('')
+  const [aiLoading, setAiLoading]   = useState(false)
+  const [aiError, setAiError]       = useState<string>('')
 
   const strategyDef = STRATEGIES.find(s => s.id === strategyId)!
 
@@ -307,9 +395,15 @@ export default function BacktestPage() {
   const runBacktest = useCallback(async () => {
     const toRun = compareMode ? STRATEGIES : [strategyDef]
     setLoading(true)
+    setAiAnalysis('')
+    setAiError('')
     setRuns(toRun.map(s => ({ strategyId: s.id, label: s.label, color: s.color, result: null, error: '' })))
 
-    const results = await Promise.all(toRun.map(async s => {
+    // For large top-N in compare mode, run sequentially to avoid saturating the Rust API
+    const largeUniverse = topN !== undefined && topN >= 1000 && compareMode
+    const TIMEOUT_MS = 90_000
+
+    const runOne = async (s: typeof toRun[0]) => {
       const params: Record<string, number> = {}
       for (const p of s.params ?? []) params[p.key] = getParam(s.id, p.key, p.default)
       const body: SimRequest = {
@@ -322,19 +416,43 @@ export default function BacktestPage() {
         risk_profile: riskProfile,
         ...(topN !== undefined && isTopNApplicable(universe, assetTypes) ? { top_n: topN } : {}),
       }
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
       try {
         const res = await fetch('/api/backtest/run', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
+          signal: controller.signal,
         })
         const data = await res.json()
         if (!res.ok) return { id: s.id, result: null as SimResult | null, error: data.error ?? 'error' }
         return { id: s.id, result: data as SimResult, error: '' }
       } catch (e: any) {
-        return { id: s.id, result: null as SimResult | null, error: e.message ?? 'failed' }
+        const msg = e.name === 'AbortError' ? 'Simulation timed out (> 90s) — try a smaller universe' : (e.message ?? 'failed')
+        return { id: s.id, result: null as SimResult | null, error: msg }
+      } finally {
+        clearTimeout(timer)
       }
-    }))
+    }
+
+    let results: Awaited<ReturnType<typeof runOne>>[]
+    if (largeUniverse) {
+      // Sequential to protect the Rust API from concurrent large-universe allocations
+      results = []
+      for (const s of toRun) {
+        const r = await runOne(s)
+        results.push(r)
+        // Update incrementally so the user sees progress
+        setRuns(prev => prev.map(run =>
+          run.strategyId === s.id
+            ? { ...run, result: r.result, error: r.error }
+            : run
+        ))
+      }
+    } else {
+      results = await Promise.all(toRun.map(runOne))
+    }
 
     setRuns(toRun.map(s => {
       const r = results.find(x => x.id === s.id)!
@@ -342,6 +460,29 @@ export default function BacktestPage() {
     }))
     setLoading(false)
   }, [compareMode, strategyId, universe, assetTypes, topN, horizon, capital, riskProfile, paramValues])
+
+  const runAiAnalysis = useCallback(async (completedRuns: (StrategyRun & { result: SimResult })[]) => {
+    setAiLoading(true)
+    setAiAnalysis('')
+    setAiError('')
+    try {
+      const res = await fetch('/api/backtest/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          runs: completedRuns.map(r => ({ label: r.label, color: r.color, metrics: r.result.metrics })),
+          config: { universe, asset_types: assetTypes, days: horizon, initial_capital: capital, risk_profile: riskProfile, top_n: topN },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setAiError(data.error ?? 'Analysis failed'); return }
+      setAiAnalysis(data.analysis ?? '')
+    } catch (e: any) {
+      setAiError(e.message ?? 'Network error')
+    } finally {
+      setAiLoading(false)
+    }
+  }, [universe, assetTypes, horizon, capital, riskProfile, topN])
 
   const activeRuns = (compareMode
     ? runs.filter(r => r.result?.metrics)
@@ -568,18 +709,18 @@ export default function BacktestPage() {
                   <table className="w-full text-sm text-left">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-gray-700 text-xs text-gray-500 dark:text-gray-400 uppercase">
-                        <th className="py-2 pr-4">Strategy</th>
-                        <th className="py-2 pr-3 text-right">Ann. Ret</th>
-                        <th className="py-2 pr-3 text-right">Sharpe</th>
-                        <th className="py-2 pr-3 text-right">Sortino</th>
-                        <th className="py-2 pr-3 text-right">Max DD</th>
-                        <th className="py-2 pr-3 text-right">Calmar</th>
-                        <th className="py-2 pr-3 text-right">Vol</th>
-                        <th className="py-2 pr-3 text-right">Win%</th>
-                        <th className="py-2 pr-3 text-right">ES 95%</th>
-                        <th className="py-2 pr-3 text-right">Jump VaR</th>
-                        <th className="py-2 pr-3 text-right">Jump %</th>
-                        <th className="py-2 text-right">Turnover</th>
+                        <th className="py-2 pr-4 text-left">Strategy</th>
+                        <MetricTh col="Ann. Ret" />
+                        <MetricTh col="Sharpe" />
+                        <MetricTh col="Sortino" />
+                        <MetricTh col="Max DD" />
+                        <MetricTh col="Calmar" />
+                        <MetricTh col="Vol" />
+                        <MetricTh col="Win%" />
+                        <MetricTh col="ES 95%" />
+                        <MetricTh col="Jump VaR" />
+                        <MetricTh col="Jump %" />
+                        <MetricTh col="Turnover" className="pr-0" />
                       </tr>
                     </thead>
                     <tbody>
@@ -612,6 +753,56 @@ export default function BacktestPage() {
                   </table>
                 </div>
               </CardContent>
+            </Card>
+          )}
+
+          {/* ── AI Analysis Panel ── */}
+          {activeRuns.length > 0 && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>AI Tearsheet Analysis</CardTitle>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Post-doctoral institutional interpretation · llama-3.3-70b
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => runAiAnalysis(activeRuns)}
+                    disabled={aiLoading}
+                    className="rounded-md bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-3 py-1.5 text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  >
+                    {aiLoading ? (
+                      <>
+                        <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                        </svg>
+                        Analyzing…
+                      </>
+                    ) : aiAnalysis ? 'Re-analyze' : 'Analyze with AI'}
+                  </button>
+                </div>
+              </CardHeader>
+              {(aiAnalysis || aiLoading || aiError) && (
+                <CardContent>
+                  {aiLoading && !aiAnalysis && (
+                    <div className="space-y-2 animate-pulse">
+                      {[...Array(6)].map((_, i) => (
+                        <div key={i} className={`h-3 rounded bg-gray-200 dark:bg-gray-700 ${i % 3 === 2 ? 'w-2/3' : 'w-full'}`} />
+                      ))}
+                    </div>
+                  )}
+                  {aiError && (
+                    <p className="text-sm text-red-500">{aiError}</p>
+                  )}
+                  {aiAnalysis && (
+                    <div className="border border-indigo-100 dark:border-indigo-900/40 rounded-lg bg-indigo-50/40 dark:bg-indigo-950/20 p-4">
+                      <MarkdownRenderer content={aiAnalysis} />
+                    </div>
+                  )}
+                </CardContent>
+              )}
             </Card>
           )}
 

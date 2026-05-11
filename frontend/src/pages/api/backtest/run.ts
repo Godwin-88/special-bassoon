@@ -6,16 +6,23 @@ const RUST_API = process.env.RUST_API_URL ?? 'http://localhost:8080'
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 85_000) // 85s — below Vercel's 90s serverless limit
+
   try {
     const upstream = await fetch(`${RUST_API}/api/backtest`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
+      signal: controller.signal,
     })
     const data = await upstream.json()
     if (!upstream.ok) return res.status(upstream.status).json(data)
     res.status(200).json(data)
   } catch (err: any) {
-    res.status(502).json({ error: err.message ?? 'upstream error' })
+    const msg = err.name === 'AbortError' ? 'Simulation timed out — try a smaller universe or fewer strategies' : (err.message ?? 'upstream error')
+    res.status(502).json({ error: msg })
+  } finally {
+    clearTimeout(timer)
   }
 }
