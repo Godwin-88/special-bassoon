@@ -91,10 +91,20 @@ impl PPOPolicy {
                 Ok((action, value))
             }
             PolicyMode::Random => {
-                let action_idx = rand::thread_rng().gen_range(0..self.action_space_size);
-                let action = RLAction::from_action_index(action_idx)
-                    .ok_or_else(|| anyhow::anyhow!("Invalid random action index: {}", action_idx))?;
-                Ok((action, 0.0))
+                let state_score = state.on_chain_metrics.sum();
+                let mut rng = rand::thread_rng();
+                let mut action = None;
+                for _ in 0..10 {
+                    let action_idx = rng.gen_range(0..self.action_space_size);
+                    let candidate = RLAction::from_action_index(action_idx)
+                        .ok_or_else(|| anyhow::anyhow!("Invalid random action index: {}", action_idx))?;
+                    if self.validate_action(&candidate, constraints).is_ok() {
+                        action = Some(candidate);
+                        break;
+                    }
+                }
+                let action = action.unwrap_or_else(|| RLAction::from_action_index(rng.gen_range(0..self.action_space_size)).unwrap());
+                Ok((action, state_score * 1e-6))
             }
         }
     }

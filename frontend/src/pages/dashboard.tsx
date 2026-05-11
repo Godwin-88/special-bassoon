@@ -17,15 +17,38 @@ interface GraphNode { id: string; val: number }
 interface GraphLink { source: string; target: string; value: number }
 interface GraphData { nodes: GraphNode[]; links: GraphLink[] }
 
+interface BacktestMetrics {
+  sortino_ratio?: number
+  sharpe_ratio?: number
+  sharpe?: number
+  sortino?: number
+  max_drawdown_pct?: number
+  max_drawdown?: number
+  total_apy?: number
+  annualised_return?: number
+  win_rate?: number
+  cumulative_slippage_pct?: number
+  expected_shortfall?: number
+  es95?: number
+  portfolio_history?: { date: string; value: number }[]
+  jump_var_95?: number
+  jump_variance_fraction?: number
+  jump_lambda?: number
+}
+
 interface BacktestResult {
-  sortino_ratio: number
-  sharpe_ratio: number
-  max_drawdown_pct: number
-  total_apy: number
-  win_rate: number
-  cumulative_slippage_pct: number
-  expected_shortfall: number
-  portfolio_history: [string, number][]
+  metrics?: BacktestMetrics
+  assets?: { id: string; label: string; asset_type: string }[]
+  universe_size?: number
+  // legacy flat fields (old static handler)
+  sortino_ratio?: number
+  sharpe_ratio?: number
+  max_drawdown_pct?: number
+  total_apy?: number
+  win_rate?: number
+  cumulative_slippage_pct?: number
+  expected_shortfall?: number
+  portfolio_history?: { date: string; value: number }[]
 }
 
 function riskColor(level: number): string {
@@ -72,12 +95,12 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [])
 
-  const portfolioChartData = backtest?.portfolio_history
-    .filter(([, val]) => val != null && isFinite(val))
-    .map(([ts, val]) => ({
-      time: new Date(ts).toLocaleDateString(),
-      value: parseFloat(val.toFixed(2)),
-    })) ?? []
+  const portfolioChartData = (backtest?.metrics?.portfolio_history ?? backtest?.portfolio_history ?? [])
+    .filter((point: { date: string; value: number }) => point.value != null && isFinite(point.value))
+    .map((point: { date: string; value: number }) => ({
+      time: new Date(point.date).toLocaleDateString(),
+      value: parseFloat(point.value.toFixed(2)),
+    }))
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 dark:bg-gray-950 min-h-screen">
@@ -153,10 +176,10 @@ export default function Dashboard() {
           <CardContent className="h-[400px]">
             {backtest && (
               <div className="mb-3 grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
-                <span>Sortino: <strong className={riskColor(Math.max(0, 1 - backtest.sortino_ratio / 3))}>{backtest.sortino_ratio.toFixed(3)}</strong></span>
-                <span>Sharpe: <strong>{backtest.sharpe_ratio.toFixed(3)}</strong></span>
-                <span>Max DD: <strong className={riskColor(backtest.max_drawdown_pct / 100)}>{backtest.max_drawdown_pct.toFixed(1)}%</strong></span>
-                <span>APY: <strong>{(backtest.total_apy * 100).toFixed(1)}%</strong></span>
+                <span>Sortino: <strong className={riskColor(Math.max(0, 1 - ((backtest.metrics?.sortino ?? backtest.sortino_ratio ?? 0)) / 3))}>{(backtest.metrics?.sortino ?? backtest.sortino_ratio ?? 0).toFixed(3)}</strong></span>
+                <span>Sharpe: <strong>{(backtest.metrics?.sharpe ?? backtest.sharpe_ratio ?? 0).toFixed(3)}</strong></span>
+                <span>Max DD: <strong className={riskColor(Math.abs(backtest.metrics?.max_drawdown ?? backtest.max_drawdown_pct ?? 0) / 100)}>{(Math.abs(backtest.metrics?.max_drawdown ?? backtest.max_drawdown_pct ?? 0) * (backtest.metrics ? 100 : 1)).toFixed(1)}%</strong></span>
+                <span>APY: <strong>{((backtest.metrics?.annualised_return ?? backtest.total_apy ?? 0) * 100).toFixed(1)}%</strong></span>
               </div>
             )}
             <ResponsiveContainer width="100%" height={330}>

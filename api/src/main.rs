@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post, put},
@@ -85,9 +85,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/execution-logs", get(get_execution_logs))
         .route("/api/metrics", get(get_metrics))
         .route("/api/graph", get(get_graph))
+        .route("/api/backtest", get(get_default_backtest))
         .route("/api/backtest", post(run_backtest))
         .route("/api/analytics/protocols", get(get_analytics_protocols))
         .route("/api/protocol-context", get(get_protocol_context))
+        .route("/api/assets", get(get_assets))
+        .route("/api/causality", post(run_causality))
+        .route("/api/jump-var", post(run_jump_var))
         .route("/health", get(health_check))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -236,7 +240,7 @@ async fn get_execution_logs(State(_state): State<Arc<AppState>>) -> impl IntoRes
 /// GET /api/metrics — returns live systemic risk metrics
 async fn get_metrics(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
     use rl_agent::backtester::{generate_synthetic_data, BacktestEnvironment};
-    use solfest_core::{Portfolio, RiskProfile, RLAction, Chain, Protocol, AllocationPercentage};
+    use solfest_core::{Portfolio, RLAction, Chain, Protocol, ExecutionConstraints, AllocationPercentage};
     use neo4j_graph::{GraphEmbeddings, RiskGraph, GARCHModel, BayesianRiskNetwork, Evidence};
 
     // Run a short synthetic backtest to get real metrics
@@ -258,6 +262,22 @@ async fn get_metrics(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
     let evidence = bay_net.update_from_market_data(garch_vol, 0.6);
     let cascade_prob = bay_net.p_liquidation_cascade(&evidence);
 
+    let portfolio = Portfolio::new("dashboard_user".to_string());
+    let constraints = ExecutionConstraints::default();
+    let graph_embeddings = GraphEmbeddings::new();
+    let mut env = BacktestEnvironment::new(market_data.clone(), portfolio, constraints, graph_embeddings);
+    let mut portfolio_metrics = env.get_portfolio_metrics();
+    if let Some(state) = env.step() {
+        let action = RLAction {
+            chain: Chain::Ethereum,
+            protocol: Protocol::Aave,
+            allocation_pct: AllocationPercentage::Pct50,
+            timestamp: state.timestamp,
+        };
+        let _ = env.execute_action(&action);
+        portfolio_metrics = env.get_portfolio_metrics();
+    }
+
     // Risk graph absorption ratio (using a 7-node mock graph)
     let mut rg = RiskGraph::new_with_mock_data();
     let absorption = rg.calculate_absorption_ratio(3).unwrap_or(0.5);
@@ -275,7 +295,7 @@ async fn get_metrics(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
 
     Json(MetricsResponse {
         absorption,
-        tvl: 48_000_000_000.0,
+        tvl: env.portfolio.total_value_usd,
         contagion: contagion_paths,
         expected_shortfall: es,
         garch_volatility: garch_vol,
@@ -331,6 +351,39 @@ async fn get_analytics_protocols(State(state): State<Arc<AppState>>) -> impl Int
 }
 
 /// POST /api/backtest — multi-asset portfolio simulation via portfolio_sim engine
+async fn get_default_backtest(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
+    // Return a static backtest result for the dashboard
+    let result = rl_agent::SimResult {
+        metrics: rl_agent::SimMetrics {
+            annualised_return: 0.12,
+            sharpe: 1.5,
+            sortino: 1.8,
+            max_drawdown: 0.15,
+            calmar: 0.8,
+            win_rate: 0.55,
+            volatility: 0.25,
+            es95: -0.08,
+            turnover: 0.3,
+            jump_var_95: 0.032,
+            jump_variance_fraction: 0.08,
+            jump_lambda: 0.015,
+            portfolio_history: vec![
+                rl_agent::PortfolioPoint { date: "2026-01-01".to_string(), value: 100000.0 },
+                rl_agent::PortfolioPoint { date: "2026-02-01".to_string(), value: 102000.0 },
+                rl_agent::PortfolioPoint { date: "2026-03-01".to_string(), value: 101500.0 },
+                rl_agent::PortfolioPoint { date: "2026-04-01".to_string(), value: 103000.0 },
+                rl_agent::PortfolioPoint { date: "2026-05-01".to_string(), value: 102500.0 },
+            ],
+        },
+        assets: vec![
+            rl_agent::AssetInfo { id: "eth".to_string(), label: "ETH".to_string(), asset_type: "spot".to_string() },
+            rl_agent::AssetInfo { id: "btc".to_string(), label: "BTC".to_string(), asset_type: "spot".to_string() },
+        ],
+        universe_size: 2,
+    };
+    (StatusCode::OK, Json(result)).into_response()
+}
+
 async fn run_backtest(
     State(_state): State<Arc<AppState>>,
     Json(req): Json<BacktestRequest>,
@@ -339,6 +392,131 @@ async fn run_backtest(
         Ok(result) => (StatusCode::OK, Json(result)).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({"error": e}))).into_response(),
     }
+}
+
+// ─── Asset catalogue ─────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct AssetsQuery {
+    universe: Option<String>,
+}
+
+/// GET /api/assets?universe=<id> — returns the curated asset catalogue.
+/// Used by the frontend to populate the ticker multi-select.
+async fn get_assets(Query(q): Query<AssetsQuery>) -> impl IntoResponse {
+    let entries = rl_agent::list_catalogue(q.universe.as_deref());
+    Json(entries)
+}
+
+// ─── Causality request/response ───────────────────────────────────────────────
+
+/// POST /api/causality — Transfer Entropy causality matrix between named time series.
+///
+/// Based on: Stavroglou et al. (2021) Entropy 23(5):621.
+/// TE(X→Y, k) = H(Y_t | Y_{t-k}) − H(Y_t | X_{t-k}, Y_{t-k})
+#[derive(Deserialize)]
+struct CausalityRequest {
+    /// Named series: [{name, is_sentiment, data}]
+    series: Vec<CausalitySeriesInput>,
+    /// Temporal lag k (default 1 = one trading day)
+    lag: Option<usize>,
+    /// Equi-probable bins (default 5)
+    n_bins: Option<usize>,
+    /// Number of shuffle permutations for z-score (default 50)
+    n_shuffles: Option<usize>,
+    /// Z-score significance threshold (default 3.0)
+    z_threshold: Option<f64>,
+}
+
+#[derive(Deserialize)]
+struct CausalitySeriesInput {
+    name: String,
+    /// true = sentiment series; false = price/return series
+    is_sentiment: Option<bool>,
+    /// Raw data values (prices or returns or sentiment scores in [−1, 1])
+    data: Vec<f64>,
+    /// If true, convert prices to log-returns before analysis
+    as_returns: Option<bool>,
+}
+
+async fn run_causality(
+    State(_state): State<Arc<AppState>>,
+    Json(req): Json<CausalityRequest>,
+) -> impl IntoResponse {
+    if req.series.len() < 2 {
+        return (StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "at least 2 series required"}))).into_response();
+    }
+
+    let cfg = rl_agent::CausalityConfig {
+        lag:         req.lag.unwrap_or(1),
+        n_bins:      req.n_bins.unwrap_or(5),
+        n_shuffles:  req.n_shuffles.unwrap_or(50),
+        z_threshold: req.z_threshold.unwrap_or(3.0),
+        seed: 42,
+    };
+
+    let series: Vec<(String, bool, Vec<f64>)> = req.series.into_iter().map(|s| {
+        let data = if s.as_returns.unwrap_or(false) {
+            rl_agent::log_returns(&s.data)
+        } else {
+            s.data
+        };
+        (s.name, s.is_sentiment.unwrap_or(false), data)
+    }).collect();
+
+    let matrix = rl_agent::compute_causality_matrix(&series, &cfg);
+    (StatusCode::OK, Json(serde_json::to_value(matrix).unwrap_or_default())).into_response()
+}
+
+// ─── Jump VaR request/response ────────────────────────────────────────────────
+
+/// POST /api/jump-var — Order Statistics jump-adjusted VaR.
+///
+/// Based on: Spadafora, Sivero & Picchiotti (2018) arXiv:1803.07021.
+/// Also incorporates ΔCoVaR from: Bisias, Flood, Lo & Valavanis (2012)
+/// "A Survey of Systemic Risk Analytics" OFRwp0001.
+#[derive(Deserialize)]
+struct JumpVarRequest {
+    /// Daily return series for the target asset/portfolio
+    returns: Vec<f64>,
+    /// Optional: system (portfolio) returns for ΔCoVaR calculation
+    system_returns: Option<Vec<f64>>,
+    /// VaR confidence level (default 0.95)
+    confidence: Option<f64>,
+    /// Jump detector tolerance p (default 0.01)
+    tolerance_p: Option<f64>,
+}
+
+async fn run_jump_var(
+    State(_state): State<Arc<AppState>>,
+    Json(req): Json<JumpVarRequest>,
+) -> impl IntoResponse {
+    if req.returns.len() < 10 {
+        return (StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({"error": "at least 10 return observations required"}))).into_response();
+    }
+
+    let confidence  = req.confidence.unwrap_or(0.95).clamp(0.50, 0.9999);
+    let tolerance_p = req.tolerance_p.unwrap_or(0.01).clamp(0.001, 0.10);
+
+    let cfg = rl_agent::JumpDetectorConfig {
+        tolerance_p,
+        max_iter: 20,
+        convergence_eps: 1e-10,
+    };
+
+    let result = rl_agent::jump_adjusted_var(&req.returns, confidence, &cfg);
+
+    let delta_covar_val = req.system_returns.as_deref().map(|sys| {
+        rl_agent::delta_covar(&req.returns, sys, confidence)
+    });
+
+    let mut resp = serde_json::to_value(&result).unwrap_or_default();
+    if let Some(dc) = delta_covar_val {
+        resp["delta_covar"] = serde_json::json!(dc);
+    }
+    (StatusCode::OK, Json(resp)).into_response()
 }
 
 /// GET /api/protocol-context — fetch protocol context batch from Neo4j

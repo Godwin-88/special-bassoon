@@ -58,7 +58,7 @@ impl GraphEmbeddings {
 
         self.protocol_embeddings.clear();
         for (i, proto) in protocols.iter().enumerate() {
-            let vec = embeddings.row(i).to_owned();
+            let vec = embeddings.slice(s![i, ..]).to_owned();
             self.protocol_embeddings.insert(proto.clone(), vec);
         }
 

@@ -2,33 +2,28 @@
 
 **A Real-Time Financial Network Operating System**
 
-*GraphRAG · Bayesian Risk Networks · EVT/GARCH · Reinforcement Learning · Solana*
+*GraphRAG + Bayesian Risk Networks + RL + Solana*
 
 ---
 
-## Status
+## 🎯 **Vision**
 
-**Phase 3 complete** — institutional-grade financial engineering. Workspace compiles clean, 19 tests passing, dashboard live.
+This is no longer just "an AI DeFi app."
 
-| Layer | Component | Status |
-|-------|-----------|--------|
-| Risk Math | EVT/POT (GPD MLE), GARCH(1,1), Hotelling deflation, MC Contagion | ✅ |
-| Inference | 5-node binary Dynamic Bayesian Network (variable elimination) | ✅ |
-| RL Engine | PPO with GAE, PolicyMode::Random cold-start, 720-action space | ✅ |
-| Backtester | Synthetic + historical data, full PortfolioMetrics suite | ✅ |
-| API | Axum REST on :8080, CORS, /api/metrics /api/graph /api/backtest | ✅ |
-| Dashboard | Next.js 16, live metrics cards, force-graph, Recharts portfolio chart | ✅ |
-| Execution Layer | Transaction construction (Solana/EVM) | ⏳ Phase 4 |
-| Live Data | QuickNode RPC, DeFiLlama streaming | ⏳ Phase 4 |
+This becomes an **institutional-grade systemic risk engine**, **cross-chain allocator**, **probabilistic forecasting system**, and **autonomous execution layer**.
+
+Traditional DeFi allocators optimize: APY, TVL, emissions.
+
+**You optimize: Risk-adjusted network survival probability.**
 
 ---
 
-## Architecture
+## 🏗️ **High-Level System Architecture**
 
 ```
                    ┌────────────────────┐
-                   │  Cross-Chain Data  │
-                   │  Solana/EVM/CEX    │
+                   │ Cross-Chain Data   │
+                   │ Solana/EVM/CEX     │
                    └─────────┬──────────┘
                              │
                     Streaming Pipelines
@@ -37,197 +32,373 @@
           │                                     │
           ▼                                     ▼
 ┌────────────────────┐              ┌────────────────────┐
-│  Knowledge Graph   │              │ Time-Series Engine │
-│  Neo4j + GraphRAG  │              │  GARCH · EVT · DBN │
+│ Knowledge Graph     │              │ Time-Series Engine │
+│ Neo4j + GraphRAG    │              │ Market State       │
 └─────────┬──────────┘              └─────────┬──────────┘
           │                                     │
           ▼                                     ▼
 ┌─────────────────────────────────────────────────────┐
-│  SYSTEMIC RISK ENGINE                               │
-│  Absorption Ratio · MC Contagion · EVT · Bayesian  │
+│ SYSTEMIC RISK ENGINE                                │
+│ Bayesian Nets + EVT + Graph Analytics + Stress Sim │
 └─────────────────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────┐
-│  RL POLICY ENGINE                                   │
-│  PPO · GAE · 720 Actions · Reward = Y - λ·Risk     │
+│ RL POLICY ENGINE                                    │
+│ Portfolio Allocation + Routing + Hedging           │
 └─────────────────────────────────────────────────────┘
                              │
                              ▼
 ┌─────────────────────────────────────────────────────┐
-│  EXECUTION LAYER                                    │
-│  Solana · LI.FI · QuickNode · Smart Routing        │
-└─────────────────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────┐
-│  DASHBOARD                                          │
-│  Next.js 16 · Force Graph · Recharts · Live API    │
+│ EXECUTION LAYER                                     │
+│ Solana + LI.FI + QuickNode + Smart Routing         │
 └─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Academic Foundation
+## 📚 **Academic Foundation**
 
-| Algorithm | Reference | Status |
-|-----------|-----------|--------|
-| Absorption Ratio | Kritzman et al. (2011) | ✅ Hotelling eigenvalue deflation |
-| Contagion Simulation | Eisenberg & Noe (2001) | ✅ Stochastic MC with liquidation tipping |
-| EVT / POT | McNeil, Frey & Embrechts (2005) Ch. 7 | ✅ GPD MLE via Nelder-Mead |
-| GARCH(1,1) | Bollerslev (1986) | ✅ Gaussian MLE, stationarity enforced |
-| Bayesian DBN | Pearl (1988); Koller & Friedman (2009) | ✅ Variable elimination, 5-node binary |
-| PPO | Schulman et al. (2017) | ✅ Clip loss, value coeff, entropy reg |
-| GAE | Schulman et al. (2016) | ✅ λ=0.95, terminal bootstrapping |
-| Sharpe / Sortino / Calmar | Sharpe (1966); Sortino & Price (1994) | ✅ |
-
----
-
-## Reward Function
-
-```
-R_t = Y_t − λ₁·ES_t − λ₂·C_t − λ₃·S_t − λ₄·L_t
-
-  Y_t  = daily yield
-  ES_t = Expected Shortfall / CVaR (EVT-derived)   λ₁ = 0.35
-  C_t  = Contagion risk index                       λ₂ = 0.30
-  S_t  = Slippage cost fraction                     λ₃ = 0.15
-  L_t  = Liquidity instability index                λ₄ = 0.20
-
-Scaled to basis points, clamped to [−1000, 1000].
-```
+| Module | System Component | Implementation |
+|--------|------------------|----------------|
+| Systemic Risk | Contagion Engine | Rust + petgraph |
+| Variance Modeling | Volatility Intelligence | GARCH + EVT |
+| Deep Learning VaR | Forecasting Engine | Transformer + GNN |
+| EVT | Tail Risk Engine | POT Method |
+| Bayesian Networks | Probabilistic Risk Graph | Custom inference |
+| Network Learning | Graph Structure Discovery | Neo4j + GraphRAG |
+| Climate/Vasicek | Macro Risk Layer | Time-series models |
+| Dynamic Bayesian Nets | Temporal Causal Inference | Gibbs sampling |
 
 ---
 
-## Project Structure
+## 🏛️ **Layer-by-Layer Architecture**
 
+### **Layer 1: Data Ingestion**
+**Real-Time Financial Sensor Network**
+
+**Sources:**
+- **On-chain**: Solana, Ethereum, Arbitrum, Base, Optimism via QuickNode
+- **Cross-chain**: LI.FI routing, bridge latency, slippage, liquidity depth
+- **Protocol Data**: TVL, LP migration, whale concentration, liquidation exposure
+
+**Collects:**
+- Bridge latency & fragmentation
+- Route failures & concentration
+- Protocol dependencies & exposures
+- Governance & oracle risks
+
+### **Layer 2: Knowledge Graph**
+**Financial Ontology Engine**
+
+**Built in Neo4j with schema:**
+```
+Wallet → PROVIDES_LIQUIDITY_TO → Protocol
+Protocol → DEPENDS_ON → Oracle
+Protocol → CAN_LIQUIDATE → Vault
+DAO → GOVERNS → Protocol
+Chain → BRIDGES_TO → Chain
+Protocol → CORRELATED_WITH → Protocol
+```
+
+**Enables:**
+- Contagion simulation
+- Systemic fragility analysis
+- Recursive exposure tracking
+- Hidden dependency discovery
+- Governance capture detection
+- Liquidity collapse forecasting
+
+### **Layer 3: Systemic Risk Engine**
+**Bayesian + Graph-Theoretic Risk Intelligence**
+
+#### **3A: Graph-Theoretic Systemic Risk**
+- **Eigenvector Centrality**: Detect "too interconnected to fail"
+- **Contagion Simulation**: Bridge failure → Stablecoin depeg → LP flight → Lending insolvency
+- **Absorption Ratio**: Detect synchronized market fragility
+
+#### **3B: Dynamic Bayesian Risk Networks**
+**Nodes:**
+- Volatility Regime
+- Liquidity Stress
+- Bridge Failure Probability
+- Stablecoin Risk
+- Governance Attack Risk
+- Validator Concentration
+- Liquidation Cascade Risk
+
+**Inference Methods:**
+- Gibbs sampling
+- Rejection sampling
+- Likelihood weighting
+- Variable elimination
+
+#### **3C: EVT Tail Risk Engine**
+**Essential for crypto's fat-tailed distributions:**
+
+```
+POT Method: P(X>u+y|X>u) ≈ (1 + ξ(y/β))^(-1/ξ)
+Expected Shortfall: ES_α = E[X|X > VaR_α]
+```
+
+**Models:**
+- Liquidation cascades
+- Bridge failures
+- Depeg events
+- Volatility spikes
+
+### **Layer 4: AI Forecasting Engine**
+**Multi-Transformer Architecture**
+
+**Forecasts:**
+- Volatility regimes
+- Liquidity migration
+- Funding rates
+- Stablecoin pressure
+- Bridge congestion
+- TVL rotation
+- Liquidation probability
+
+**Models:**
+- Temporal Fusion Transformer (regime prediction)
+- DeepAR (probabilistic forecasting)
+- Graph Neural Nets (contagion modeling)
+- Transformer + GNN hybrid (temporal graph intelligence)
+
+### **Layer 5: RL Policy Engine**
+**Autonomous Allocation Intelligence**
+
+**State Space (256-dim):**
+- Graph embeddings (64-dim)
+- Volatility regime (32-dim)
+- Bayesian probabilities (64-dim)
+- EVT metrics (32-dim)
+- Liquidity topology (32-dim)
+- Bridge stress (32-dim)
+
+**Action Space (720 actions):**
+- Allocate Capital
+- Hedge Exposure
+- Bridge Assets
+- Exit Pool
+- Rotate Stablecoins
+- Reduce Leverage
+- Increase Cash
+- Move Chains
+
+**Reward Function:**
+```
+R_t = Y_t - λ₁·ES_t - λ₂·C_t - λ₃·S_t - λ₄·L_t
+
+Where:
+Y_t = yield
+ES_t = expected shortfall (EVT)
+C_t = contagion risk
+S_t = slippage
+L_t = liquidity instability
+```
+
+### **Layer 6: Execution Engine**
+**Solana + Cross-Chain Router**
+
+**Solana Layer:**
+- Vaults & staking
+- Low-latency trading
+- Hedging & rebalancing
+
+**Cross-Chain Layer (LI.FI):**
+- Route optimization
+- Bridge selection
+- Slippage minimization
+- Stressed route avoidance
+
+### **Layer 7: Stress Testing Engine**
+**Scenario Simulator**
+
+**Simulates:**
+- USDC depeg cascades
+- Bridge exploits
+- Solana outages
+- Validator cartelization
+- Oracle manipulation
+- Liquidity migration
+- Perp cascades
+- Stablecoin bank runs
+
+**Dynamic Graph Shock Engine:**
+- Recursive propagation
+- Bayesian updates
+- RL policy reactions
+
+---
+
+## 🛠️ **Technical Implementation**
+
+### **Rust Stack**
+| Purpose | Crate |
+|---------|-------|
+| Linear Algebra | nalgebra |
+| Arrays | ndarray |
+| Statistics | statrs |
+| Optimization | argmin |
+| Random Processes | rand_distr |
+| Graph Analytics | petgraph |
+| AI Training | PyTorch |
+| RL | Ray RLlib |
+| Inference | Candle/tch-rs |
+
+### **Infrastructure Stack**
+| Layer | Technology |
+|-------|------------|
+| Blockchain | Solana Rust SDK |
+| RPC | QuickNode |
+| Cross-chain | LI.FI |
+| Graph DB | Neo4j |
+| Streaming | Kafka/Redpanda |
+| APIs | Axum |
+| Frontend | Next.js |
+
+### **Project Structure**
 ```
 solfest/
-├── solfest-core/           # Shared types: Portfolio, RLState, RLAction, Constraints
-├── neo4j-graph/            # Risk graph, embeddings, EVT, GARCH, Bayesian DBN
-│   ├── src/risk_graph.rs   # Absorption ratio, MC contagion (Hotelling deflation)
-│   ├── src/evt.rs          # EVT/POT — GPD MLE, VaR, Expected Shortfall
-│   ├── src/garch.rs        # GARCH(1,1) — MLE, conditional variances, forecast
-│   └── src/bayesian_network.rs  # 5-node DBN, variable elimination inference
-├── data-pipeline/          # On-chain data, social signals, state construction
-├── rl-agent/               # PPO policy, GAE training, backtester
-│   ├── src/backtester.rs   # BacktestEnvironment, PortfolioMetrics, reward fn
-│   ├── src/policy.rs       # PPOPolicy (Random + Loaded modes), PPO loss
-│   └── src/training.rs     # PPOTrainer, EqualWeightBaseline
-├── execution-engine/       # Rebalancing + LI.FI routing (Phase 4)
-├── api/                    # Axum REST API — port 8080
-│   └── src/main.rs         # /api/metrics, /api/graph, /api/backtest, /health
-├── frontend/               # Next.js 16 dashboard
-│   └── src/pages/
-│       ├── dashboard.tsx   # Live metrics, force-graph, portfolio chart
-│       └── api/            # Proxy routes (metrics, graph, backtest)
-├── cypher/                 # Neo4j schema and seed data (65 sources, 340+ nodes)
-├── docker-compose.yml
-└── Cargo.toml              # Workspace
+├── solfest-core/         # Core types (Portfolio, State, Action, Constraints)
+├── neo4j-graph/          # Neo4j client + embeddings + risk queries
+├── data-pipeline/        # On-chain data + social signals + state construction
+├── rl-agent/             # PPO policy + training + backtester
+├── execution-engine/     # Rebalancing + LI.FI routing + constraints
+├── api/                  # REST API (Axum) + websockets
+├── cypher/               # Neo4j knowledge graph (65 sources, 340+ nodes)
+├── docker-compose.yml    # Multi-service infrastructure
+└── Cargo.toml            # Workspace configuration
 ```
 
 ---
 
-## Quick Start
+## 📋 **Implementation Roadmap**
 
-### Prerequisites
+### **Phase 1: Foundation (Weeks 1-2)**
+- [x] Rust workspace with 6 crates
+- [x] Core types: Portfolio, RLState, RLAction, ExecutionConstraints
+- [x] Neo4j graph client with query methods
+- [ ] Graph embedding pipeline (protocol similarity, risk correlation)
+- [ ] State vector construction (on-chain + embeddings + signals)
+- [ ] Bayesian network skeleton
 
-- Rust (stable)
-- Node.js 20+
-- Python 3.12 + PyTorch (optional — needed only for neural network inference)
+### **Phase 2: Systemic Risk Engine (Weeks 3-5)**
+- [ ] Graph-theoretic risk algorithms (eigenvector centrality, contagion simulation)
+- [ ] EVT tail risk engine (POT method, expected shortfall)
+- [ ] Dynamic Bayesian networks (Gibbs sampling, causal inference)
+- [ ] Stress testing framework
 
-### 1. Environment
+### **Phase 3: AI Forecasting (Weeks 6-8)**
+- [ ] Multi-transformer architecture
+- [ ] Graph neural networks for contagion
+- [ ] Probabilistic forecasting models
+- [ ] Real-time inference pipeline
 
+### **Phase 4: RL Policy Engine (Weeks 9-11)**
+- [ ] PPO implementation with custom reward function
+- [ ] Historical backtesting (15+ months)
+- [ ] Risk-adjusted optimization
+- [ ] Multi-chain allocation logic
+
+### **Phase 5: Execution Layer (Weeks 12-14)**
+- [ ] Solana vault integration
+- [ ] LI.FI cross-chain routing
+- [ ] Slippage prediction and MEV avoidance
+- [ ] Real-time rebalancing orchestration
+
+### **Phase 6: Production & Scale (Weeks 15-16)**
+- [ ] End-to-end system integration
+- [ ] Testnet validation (7 days)
+- [ ] Mainnet canary deployment ($10k-50k)
+- [ ] Performance monitoring and alerting
+
+---
+
+## 🚀 Quick Start
+
+### 1. Environment Setup
 ```bash
 cp .env.example .env
-# Set: NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, LIFI_API_KEY
-# Optional for tch: LIBTORCH=<path/to/torch> LIBTORCH_CXX11_ABI=0
+# Configure: NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, LIFI_API_KEY
 ```
 
-### 2. Initialize Neo4j Knowledge Graph
+### 5. Initialize Knowledge Graph
+To seed the graph with the financial ontology:
 
 ```bash
+# 1. Start Neo4j
 docker-compose up -d neo4j
 
-# Seed the financial ontology
-for f in cypher/*.cypher; do
-  cat "$f" | docker exec -i neo4j cypher-shell -u neo4j -p password
+# 2. Seed Initial Graph (Cypher Scripts)
+# Import all scripts in the cypher/ directory using cypher-shell
+for file in cypher/*.cypher; do   cat "$file" | docker exec -i neo4j cypher-shell -u neo4j -p password
 done
+
+# 3. Enrich Graph with System Nodes
+# Run the graph builder to add embedding-specific nodes
+cargo run -p neo4j-graph -- --enrich  | cargo run --bin embed_data
 ```
 
-### 3. Run the API (port 8080)
-
+### 3. Run Backend (Rust)
+To launch the API and Execution Engine:
 ```bash
 cargo run -p api
 ```
 
-### 4. Run the Dashboard
-
+### 4. Run Frontend (Next.js)
+In a separate terminal:
 ```bash
 cd frontend
-npm install
-npm run dev
+npm install && npm run dev
 ```
 
-Dashboard: `http://localhost:3000` (redirects to `/dashboard`)
+The system is now operational at `http://localhost:3000`.
 
-### 5. Run Tests
-
-```bash
-cargo test -p neo4j-graph    # 13 tests: EVT, GARCH, Bayesian, contagion
-cargo test -p rl-agent       # 6 tests: backtester, PPO, training, baseline
-```
-
-### Neural Network Inference (optional)
-
-`tch` (PyTorch bindings) is an optional feature. The system runs fully in `PolicyMode::Random` without it. To enable:
-
-```bash
-cargo build -p rl-agent --features torch
-```
 
 ---
 
-## API Reference
+## 🎯 **Key Differentiators**
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/metrics` | Live systemic risk: absorption ratio, GARCH vol, EVT ES, Bayesian cascade probability |
-| GET | `/api/graph` | Risk network nodes and edges for force-graph visualization |
-| POST | `/api/backtest` | Run synthetic backtest — body: `{"days": 365, "initial_value_usd": 100000}` |
-| GET | `/health` | Health check |
+**Most DeFi AI systems are:**
+- Reactive
+- Statistical
+- Shallow
 
----
+**This architecture is:**
+- **Causal** (Bayesian networks)
+- **Graph-native** (Neo4j + GraphRAG)
+- **Probabilistic** (EVT + forecasting)
+- **Autonomous** (RL execution)
 
-## Risk Interpretations
-
-**Absorption Ratio**
-- `> 0.60` → HIGH systemic risk — reduce positions, increase hedging
-- `0.40–0.60` → MODERATE — standard management
-- `< 0.40` → LOW — diversification effective
-
-**Bayesian Cascade Probability** (P(LiquidationCascade = High | market state))
-- CPTs calibrated from: Terra/LUNA collapse, Nomad Bridge exploit, Euler Finance hack, USDC depeg, Aave liquidity crisis
+**Result:** Institutional-grade autonomous treasury management, not just a crypto app.
 
 ---
 
-## Phase Roadmap
+## 📊 **Success Metrics**
 
-| Phase | Scope | Status |
-|-------|-------|--------|
-| 1 | Core types, workspace, Neo4j client, backtester scaffold | ✅ Complete |
-| 2 | Portfolio metrics, PPO loss, GAE, absorption ratio scaffold | ✅ Complete |
-| 3 | EVT/GARCH/Bayesian/MC-contagion, wired API, live dashboard | ✅ Complete |
-| 4 | QuickNode live data, Solana/EVM tx construction, LI.FI routing | ⏳ Next |
-| 5 | Neural forecasting (Transformer + GNN), RL training loop at scale | ⏳ Planned |
-| 6 | Testnet validation, mainnet canary, monitoring, compliance | ⏳ Planned |
+- **Risk-adjusted Returns**: 2-3x Sortino ratio vs. equal-weight
+- **Survival Probability**: 99.9% uptime during stress events
+- **Execution Efficiency**: <0.5% slippage, <5min bridge latency
+- **Systemic Awareness**: Predict 80%+ of contagion events
+- **Adaptability**: Real-time response to market regime changes
 
 ---
 
-## Key Differentiators
+## 🤝 **Contributing**
 
-Most DeFi AI systems are reactive, statistical, and shallow.
+This is a research-grade financial system. Contributions welcome from:
+- Quantitative researchers
+- Risk modeling experts
+- DeFi protocol engineers
+- ML/RL specialists
+- Rust developers
 
-This system is **causal** (Bayesian networks), **graph-native** (Neo4j + GraphRAG), **probabilistic** (EVT + GARCH forecasting), and **autonomous** (RL execution).
+**Contact:** Open an issue or PR with detailed technical proposals.
 
-Result: institutional-grade autonomous treasury management, not just a yield optimizer.
+---
+
+**Status**: Phase 1 foundation complete. Systemic risk engine development in progress.
+
+*Building the future of autonomous cross-chain finance.* 🚀

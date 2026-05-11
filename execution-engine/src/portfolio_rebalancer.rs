@@ -2,6 +2,7 @@ use solfest_core::{Portfolio, RLAction, Allocation};
 use crate::bridge_router::BridgeRouter;
 use anyhow::Result;
 use chrono::Utc;
+use tracing::info;
 use uuid::Uuid;
 
 pub struct PortfolioRebalancer {
@@ -53,6 +54,14 @@ impl PortfolioRebalancer {
 
         // Identify cross-chain needs (simplified: assume funding comes from non-target allocations)
         // In reality, we'd calculate net flows between all protocols
+        if !portfolio.allocations.is_empty() {
+            let source = portfolio.allocations[0].chain.as_str();
+            if source != action.chain.as_str() {
+                if let Ok(route) = self.bridge_router.find_best_route(source, action.chain.as_str(), target_amount).await {
+                    info!("Estimated bridge fee {} via {}", route.estimated_fee_usd, route.bridge_name);
+                }
+            }
+        }
         
         portfolio.last_rebalanced = Some(Utc::now());
         Ok(())

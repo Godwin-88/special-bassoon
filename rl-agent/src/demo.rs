@@ -138,7 +138,7 @@ pub fn demo_training() {
     for episode in 0..episodes {
         env.reset();
         let mut episode_reward = 0.0;
-        let mut experiences = Vec::new();
+        let mut experiences: VecDeque<Experience> = VecDeque::new();
 
         // Run episode
         loop {
@@ -146,7 +146,7 @@ pub fn demo_training() {
             let action = policy.sample_action(&state);
             let (next_state, reward, done) = env.step(&action);
 
-            experiences.push(Experience {
+            experiences.push_back(Experience {
                 state,
                 action,
                 reward,
@@ -162,7 +162,8 @@ pub fn demo_training() {
         }
 
         // Update policy
-        policy.update(&experiences, learning_rate);
+        let experience_vec: Vec<Experience> = experiences.iter().cloned().collect();
+        policy.update(&experience_vec, learning_rate);
 
         if (episode + 1) % 20 == 0 {
             println!("Episode {}: Total Reward = {:.2}, Final Value = {:.0}",

@@ -115,7 +115,11 @@ impl GARCHModel {
         let uv = if p < 1.0 { self.omega / (1.0 - p) } else { last_sigma_sq };
 
         // One-step ahead
-        let sigma_sq_1 = self.omega + self.alpha * last_eps_sq + self.beta * last_sigma_sq;
+        let sigma_sq_1 = if p < 1.0 {
+            self.omega + self.alpha * last_eps_sq + self.beta * last_sigma_sq
+        } else {
+            uv.max(self.omega + self.alpha * last_eps_sq + self.beta * last_sigma_sq)
+        };
 
         let mut forecasts = Vec::with_capacity(h);
         forecasts.push(sigma_sq_1);

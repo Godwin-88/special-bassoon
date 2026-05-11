@@ -7,6 +7,7 @@ use ndarray::Array1;
 use chrono::Utc;
 use anyhow::Result;
 use std::collections::HashMap;
+use tracing::info;
 
 /// StateConstructor assembles the 256-dim RLState vector
 pub struct StateConstructor {
@@ -71,6 +72,8 @@ impl StateConstructor {
         let on_chain_vec = self.on_chain_to_vector(&components.on_chain);
         
         // Add portfolio context to on-chain vector
+        info!(protocol = protocol_name, "Constructing RL state from components");
+
         let mut final_on_chain = on_chain_vec;
         final_on_chain[8] = components.portfolio_current_value.ln_1p();
         final_on_chain[9] = (components.portfolio_current_value / components.portfolio_previous_value).ln_1p();

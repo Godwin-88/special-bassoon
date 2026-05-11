@@ -7,14 +7,16 @@ import {
 
 // ─── Types that mirror Rust SimRequest / SimResult ───────────────────────────
 
-type UniverseId = 'web3_defi' | 'web3_crypto' | 'hybrid' | 'trad_fi'
-type AssetType  = 'defi_lp' | 'lending' | 'derivatives' | 'spot' | 'equity' | 'etf' | 'commodity' | 'stablecoin_yield'
-type StrategyId =
+export type UniverseId = 'web3_defi' | 'web3_crypto' | 'hybrid' | 'trad_fi'
+export type AssetType  =
+  | 'defi_lp' | 'lending' | 'derivatives' | 'spot'
+  | 'equity' | 'etf' | 'commodity' | 'stablecoin_yield'
+export type StrategyId =
   | 'equal_weight' | 'momentum' | 'mean_reversion' | 'trend_following'
   | 'risk_parity' | 'kelly' | 'delta_neutral' | 'quant_value'
   | 'stat_arb' | 'ml_alpha' | 'canslim' | 'liquidity_provision_opt'
 
-interface SimRequest {
+export interface SimRequest {
   universe: UniverseId
   asset_types: AssetType[]
   strategy: StrategyId
@@ -22,11 +24,13 @@ interface SimRequest {
   days: number
   initial_capital: number
   risk_profile: 'conservative' | 'moderate' | 'aggressive'
+  /** 500–3000. Only sent when applicable asset types are selected. */
+  top_n?: number
 }
 
-interface PortfolioPoint { date: string; value: number }
+export interface PortfolioPoint { date: string; value: number }
 
-interface SimMetrics {
+export interface SimMetrics {
   annualised_return: number
   sharpe: number
   sortino: number
@@ -37,32 +41,52 @@ interface SimMetrics {
   es95: number
   turnover: number
   portfolio_history: PortfolioPoint[]
+  // Jump-adjusted risk metrics (Spadafora et al. arXiv:1803.07021)
+  jump_var_95?: number
+  jump_variance_fraction?: number
+  jump_lambda?: number
 }
 
-interface SimResult {
+export interface SimResult {
   metrics: SimMetrics
   assets: { id: string; label: string; asset_type: string }[]
+  universe_size: number
 }
 
 // ─── UI Config ────────────────────────────────────────────────────────────────
 
-const UNIVERSES: { id: UniverseId; label: string; desc: string }[] = [
+export const UNIVERSES: { id: UniverseId; label: string; desc: string }[] = [
   { id: 'web3_defi',   label: 'Web3 DeFi',           desc: 'LP, lending, yield protocols' },
   { id: 'web3_crypto', label: 'Web3 Spot',            desc: 'ETH, BTC, SOL, major tokens' },
-  { id: 'hybrid',      label: 'Hybrid (DeFi+TradFi)', desc: 'DeFi + equity ETFs + commodities' },
+  { id: 'hybrid',      label: 'Hybrid',               desc: 'DeFi + equity ETFs + commodities' },
   { id: 'trad_fi',     label: 'Traditional Finance',  desc: 'Equities, bonds, commodities' },
 ]
 
-const ASSET_TYPES: { id: AssetType; label: string }[] = [
-  { id: 'defi_lp',          label: 'DeFi LP' },
-  { id: 'lending',          label: 'Lending' },
-  { id: 'derivatives',      label: 'Derivatives' },
-  { id: 'spot',             label: 'Spot / Token' },
-  { id: 'stablecoin_yield', label: 'Stablecoin Yield' },
-  { id: 'equity',           label: 'Equity' },
-  { id: 'etf',              label: 'ETF' },
-  { id: 'commodity',        label: 'Commodity' },
+export const ASSET_TYPES: { id: AssetType; label: string; rankable: boolean }[] = [
+  { id: 'defi_lp',          label: 'DeFi LP',          rankable: false },
+  { id: 'lending',          label: 'Lending',          rankable: false },
+  { id: 'derivatives',      label: 'Derivatives / Futures / Options', rankable: true  },
+  { id: 'spot',             label: 'Spot / Token',     rankable: true  },
+  { id: 'stablecoin_yield', label: 'Stablecoin Yield', rankable: false },
+  { id: 'equity',           label: 'Equity / Stocks',  rankable: true  },
+  { id: 'etf',              label: 'ETF',              rankable: false },
+  { id: 'commodity',        label: 'Commodity',        rankable: false },
 ]
+
+/** Trading-day lookback options — dt = 1/252 in the Rust GBM engine. Max = 5 trading years. */
+export const LOOKBACK_OPTIONS: { days: number; label: string }[] = [
+  { days: 21,   label: '1 M'  },
+  { days: 63,   label: '3 M'  },
+  { days: 126,  label: '6 M'  },
+  { days: 252,  label: '1 Y'  },
+  { days: 504,  label: '2 Y'  },
+  { days: 756,  label: '3 Y'  },
+  { days: 1008, label: '4 Y'  },
+  { days: 1260, label: '5 Y'  },
+]
+
+/** Top-N universe size options for rankable asset types (500–3000). */
+export const TOP_N_OPTIONS = [500, 1000, 1500, 2000, 2500, 3000]
 
 interface StrategyDef {
   id: StrategyId
@@ -72,43 +96,43 @@ interface StrategyDef {
   params?: { key: 'lookback' | 'short_window' | 'long_window'; label: string; min: number; max: number; step: number; default: number }[]
 }
 
-const STRATEGIES: StrategyDef[] = [
-  { id: 'equal_weight',          label: 'Equal Weight',                  color: '#6366f1', desc: '1/N across selected assets. Monthly rebalance.' },
-  { id: 'momentum',              label: 'Momentum (Jegadeesh-Titman)',   color: '#10b981', desc: 'Overweight cross-sectional return winners.',
+export const STRATEGIES: StrategyDef[] = [
+  { id: 'equal_weight',            label: 'Equal Weight',                   color: '#6366f1', desc: '1/N across selected assets. Monthly rebalance.' },
+  { id: 'momentum',                label: 'Momentum (Jegadeesh-Titman)',    color: '#10b981', desc: 'Overweight cross-sectional return winners.',
     params: [{ key: 'lookback', label: 'Lookback (days)', min: 5, max: 120, step: 5, default: 20 }] },
-  { id: 'mean_reversion',        label: 'Mean Reversion (OU)',           color: '#f59e0b', desc: 'Long assets below moving average; Ornstein-Uhlenbeck.',
+  { id: 'mean_reversion',          label: 'Mean Reversion (OU)',            color: '#f59e0b', desc: 'Long assets below moving average; Ornstein-Uhlenbeck.',
     params: [{ key: 'lookback', label: 'MA Window (days)', min: 5, max: 60, step: 5, default: 20 }] },
-  { id: 'trend_following',       label: 'Trend Following (MA Crossover)', color: '#3b82f6', desc: 'Long when short MA > long MA; Antonacci Dual Momentum.',
+  { id: 'trend_following',         label: 'Trend Following (MA Crossover)', color: '#3b82f6', desc: 'Long when short MA > long MA; Antonacci Dual Momentum.',
     params: [
       { key: 'short_window', label: 'Short MA', min: 5, max: 30, step: 5, default: 10 },
       { key: 'long_window',  label: 'Long MA',  min: 20, max: 200, step: 10, default: 50 },
     ] },
-  { id: 'risk_parity',           label: 'Risk Parity',                   color: '#8b5cf6', desc: 'Equalise risk contribution; weight ∝ 1/vol.',
+  { id: 'risk_parity',             label: 'Risk Parity',                    color: '#8b5cf6', desc: 'Equalise risk contribution; weight ∝ 1/vol.',
     params: [{ key: 'lookback', label: 'Vol Window', min: 10, max: 60, step: 5, default: 20 }] },
-  { id: 'kelly',                 label: 'Kelly Criterion',               color: '#ec4899', desc: 'Maximise log-utility; f* = µ/σ². 40% per-asset cap.',
+  { id: 'kelly',                   label: 'Kelly Criterion',                color: '#ec4899', desc: 'Maximise log-utility; f* = µ/σ². 40% per-asset cap.',
     params: [{ key: 'lookback', label: 'Est. Window', min: 10, max: 60, step: 5, default: 20 }] },
-  { id: 'delta_neutral',         label: 'Delta-Neutral Yield',           color: '#14b8a6', desc: 'Stablecoin + lending only; zero directional exposure.' },
-  { id: 'quant_value',           label: 'Quant Value (P/TVL)',           color: '#f97316', desc: 'Long top-third by Sharpe proxy. DeFi: P/TVL, P/Revenue.',
+  { id: 'delta_neutral',           label: 'Delta-Neutral Yield',            color: '#14b8a6', desc: 'Stablecoin + lending only; zero directional exposure.' },
+  { id: 'quant_value',             label: 'Quant Value (P/TVL)',            color: '#f97316', desc: 'Long top-third by Sharpe proxy. DeFi: P/TVL, P/Revenue.',
     params: [{ key: 'lookback', label: 'Est. Window', min: 10, max: 60, step: 5, default: 20 }] },
-  { id: 'stat_arb',              label: 'Statistical Arbitrage',         color: '#06b6d4', desc: 'Long underperformers, reversion bet. Chan spread z-score.',
+  { id: 'stat_arb',                label: 'Statistical Arbitrage',          color: '#06b6d4', desc: 'Long underperformers, reversion bet. Chan spread z-score.',
     params: [{ key: 'lookback', label: 'Lookback', min: 5, max: 60, step: 5, default: 20 }] },
-  { id: 'ml_alpha',              label: 'ML Alpha (Ensemble)',           color: '#a855f7', desc: '50/50 momentum + mean-reversion signal blend.' },
-  { id: 'canslim',               label: 'CANSLIM Growth (O\'Neil)',       color: '#d97706', desc: 'Momentum with ≥50d lookback; protocol revenue growth proxy.',
+  { id: 'ml_alpha',                label: 'ML Alpha (Ensemble)',            color: '#a855f7', desc: '50/50 momentum + mean-reversion signal blend.' },
+  { id: 'canslim',                 label: "CANSLIM Growth (O'Neil)",        color: '#d97706', desc: 'Momentum with ≥50d lookback; protocol revenue growth proxy.',
     params: [{ key: 'lookback', label: 'Base Lookback', min: 30, max: 120, step: 10, default: 50 }] },
-  { id: 'liquidity_provision_opt', label: 'LP Optimisation (Uniswap V3)', color: '#0ea5e9', desc: 'Weights LP/stablecoin assets by fee_APY/vol. Chan + Harvey.',
+  { id: 'liquidity_provision_opt', label: 'LP Optimisation (Uniswap V3)',   color: '#0ea5e9', desc: 'Weights LP/stablecoin assets by fee_APY/vol. Chan + Harvey.',
     params: [{ key: 'lookback', label: 'Vol Window', min: 10, max: 60, step: 5, default: 20 }] },
 ]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function normalizeNav(history: PortfolioPoint[]): PortfolioPoint[] {
+export function normalizeNav(history: PortfolioPoint[]): PortfolioPoint[] {
   if (!history.length) return []
   const first = history[0].value
   if (!first) return []
   return history.map(p => ({ date: p.date, value: parseFloat(((p.value / first) * 100).toFixed(2)) }))
 }
 
-function drawdownSeries(nav: PortfolioPoint[]): { date: string; dd: number }[] {
+export function drawdownSeries(nav: PortfolioPoint[]): { date: string; dd: number }[] {
   let peak = -Infinity
   return nav.map(p => {
     if (p.value > peak) peak = p.value
@@ -118,7 +142,7 @@ function drawdownSeries(nav: PortfolioPoint[]): { date: string; dd: number }[] {
 
 type MergedRow = Record<string, string | number>
 
-function mergeSeries<T extends { date: string }>(
+export function mergeSeries<T extends { date: string }>(
   series: { key: string; points: T[] }[],
   valueKey: keyof T,
 ): MergedRow[] {
@@ -133,7 +157,16 @@ function mergeSeries<T extends { date: string }>(
   })
 }
 
-function pct(v: number, d = 1) { return `${(v * 100).toFixed(d)}%` }
+export function pct(v: number, d = 1): string { return `${(v * 100).toFixed(d)}%` }
+
+/** Returns true when at least one selected asset type (or default types for the universe) is rankable. */
+export function isTopNApplicable(universe: UniverseId, assetTypes: AssetType[]): boolean {
+  if (assetTypes.length > 0) {
+    return assetTypes.some(t => ASSET_TYPES.find(a => a.id === t)?.rankable)
+  }
+  // Default: TradFi and Hybrid include equity/derivatives; Crypto includes spot/derivatives
+  return universe !== 'web3_defi'
+}
 
 function exportCSV(runs: StrategyRun[]) {
   const done = runs.filter(r => r.result?.metrics) as (StrategyRun & { result: SimResult })[]
@@ -152,7 +185,7 @@ function exportCSV(runs: StrategyRun[]) {
 
 // ─── Run state ────────────────────────────────────────────────────────────────
 
-interface StrategyRun {
+export interface StrategyRun {
   strategyId: StrategyId
   label: string
   color: string
@@ -160,27 +193,116 @@ interface StrategyRun {
   error: string
 }
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+/** Top-bar universe selector — horizontal radio pills. */
+function UniverseBar({
+  value, onChange,
+}: { value: UniverseId; onChange: (v: UniverseId) => void }) {
+  return (
+    <div data-testid="universe-bar" className="flex flex-wrap gap-2">
+      {UNIVERSES.map(u => (
+        <label key={u.id} data-testid={`universe-${u.id}`}
+          className={`cursor-pointer rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+            value === u.id
+              ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+              : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-indigo-400'
+          }`}>
+          <input type="radio" className="sr-only" name="universe" value={u.id}
+            checked={value === u.id} onChange={() => onChange(u.id)} />
+          <span className="block font-semibold">{u.label}</span>
+          <span className="block text-xs opacity-70 mt-0.5">{u.desc}</span>
+        </label>
+      ))}
+    </div>
+  )
+}
+
+/** Top-bar asset type selector — horizontal checkbox pills. */
+function AssetTypeBar({
+  selected, onChange,
+}: { selected: AssetType[]; onChange: (v: AssetType[]) => void }) {
+  const toggle = (t: AssetType) =>
+    onChange(selected.includes(t) ? selected.filter(x => x !== t) : [...selected, t])
+
+  return (
+    <div data-testid="asset-type-bar" className="flex flex-wrap gap-1.5 items-center">
+      {ASSET_TYPES.map(t => (
+        <button key={t.id} data-testid={`asset-type-${t.id}`}
+          onClick={() => toggle(t.id)}
+          className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+            selected.includes(t.id)
+              ? 'bg-indigo-600 border-indigo-600 text-white'
+              : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-indigo-400'
+          }`}>
+          {t.label}
+        </button>
+      ))}
+      {selected.length > 0 && (
+        <button onClick={() => onChange([])}
+          className="text-xs text-gray-400 underline ml-1">
+          clear
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Top-bar Top-N selector — shown only when applicable asset types are selected. */
+function TopNBar({
+  universe, assetTypes, value, onChange,
+}: {
+  universe: UniverseId
+  assetTypes: AssetType[]
+  value: number | undefined
+  onChange: (v: number | undefined) => void
+}) {
+  if (!isTopNApplicable(universe, assetTypes)) return null
+
+  return (
+    <div data-testid="top-n-bar" className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">
+        Universe Size
+      </span>
+      {TOP_N_OPTIONS.map(n => (
+        <button key={n} data-testid={`top-n-${n}`}
+          onClick={() => onChange(value === n ? undefined : n)}
+          className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+            value === n
+              ? 'bg-indigo-600 text-white'
+              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+          }`}>
+          Top {n.toLocaleString()}
+        </button>
+      ))}
+      {value !== undefined && (
+        <button onClick={() => onChange(undefined)} className="text-xs text-gray-400 underline">
+          curated only
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function BacktestPage() {
-  const [universe, setUniverse] = useState<UniverseId>('web3_defi')
+  const [universe, setUniverse]   = useState<UniverseId>('web3_defi')
   const [assetTypes, setAssetTypes] = useState<AssetType[]>([])
+  const [topN, setTopN]           = useState<number | undefined>(undefined)
   const [strategyId, setStrategyId] = useState<StrategyId>('momentum')
   const [compareMode, setCompareMode] = useState(false)
-  const [capital, setCapital] = useState(100000)
-  const [horizon, setHorizon] = useState(365)
+  const [capital, setCapital]     = useState(100000)
+  const [horizon, setHorizon]     = useState(252)
   const [riskProfile, setRiskProfile] = useState<'conservative' | 'moderate' | 'aggressive'>('moderate')
   const [paramValues, setParamValues] = useState<Partial<Record<StrategyId, Record<string, number>>>>({})
-  const [runs, setRuns] = useState<StrategyRun[]>([])
-  const [loading, setLoading] = useState(false)
+  const [runs, setRuns]           = useState<StrategyRun[]>([])
+  const [loading, setLoading]     = useState(false)
 
   const strategyDef = STRATEGIES.find(s => s.id === strategyId)!
 
   const getParam = (sid: StrategyId, key: string, def: number) =>
     paramValues[sid]?.[key] ?? def
-
-  const toggleType = (t: AssetType) =>
-    setAssetTypes(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
 
   const runBacktest = useCallback(async () => {
     const toRun = compareMode ? STRATEGIES : [strategyDef]
@@ -198,6 +320,7 @@ export default function BacktestPage() {
         days: horizon,
         initial_capital: capital,
         risk_profile: riskProfile,
+        ...(topN !== undefined && isTopNApplicable(universe, assetTypes) ? { top_n: topN } : {}),
       }
       try {
         const res = await fetch('/api/backtest/run', {
@@ -218,7 +341,7 @@ export default function BacktestPage() {
       return { strategyId: s.id, label: s.label, color: s.color, result: r.result, error: r.error }
     }))
     setLoading(false)
-  }, [compareMode, strategyId, universe, assetTypes, horizon, capital, riskProfile, paramValues])
+  }, [compareMode, strategyId, universe, assetTypes, topN, horizon, capital, riskProfile, paramValues])
 
   const activeRuns = (compareMode
     ? runs.filter(r => r.result?.metrics)
@@ -237,7 +360,7 @@ export default function BacktestPage() {
   const tickInterval = Math.max(1, Math.floor((equityData.length - 1) / 6))
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 dark:bg-gray-950 min-h-screen">
+    <div className="p-6 space-y-5 bg-gray-50 dark:bg-gray-950 min-h-screen">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Strategy Backtester</h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -245,45 +368,30 @@ export default function BacktestPage() {
         </p>
       </div>
 
+      {/* ── Top bar: universe + asset types + top-N ── */}
+      <div className="space-y-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-4">
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            Asset Universe
+          </p>
+          <UniverseBar value={universe} onChange={u => { setUniverse(u); setTopN(undefined) }} />
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+            Asset Types
+          </p>
+          <AssetTypeBar selected={assetTypes} onChange={setAssetTypes} />
+        </div>
+
+        <TopNBar universe={universe} assetTypes={assetTypes} value={topN} onChange={setTopN} />
+      </div>
+
+      {/* ── Body: sidebar + charts ── */}
       <div className="flex gap-6 items-start">
+
         {/* ── Sidebar ── */}
-        <aside className="w-72 shrink-0 space-y-4">
-
-          <Card>
-            <CardHeader><CardTitle className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Asset Universe</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {UNIVERSES.map(u => (
-                <label key={u.id} className="flex items-start gap-2 cursor-pointer">
-                  <input type="radio" name="universe" value={u.id} checked={universe === u.id}
-                    onChange={() => setUniverse(u.id)} className="mt-0.5 accent-indigo-600" />
-                  <span className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-800 dark:text-gray-200">{u.label}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-500">{u.desc}</span>
-                  </span>
-                </label>
-              ))}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Asset Types</CardTitle></CardHeader>
-            <CardContent className="flex flex-wrap gap-1.5">
-              {ASSET_TYPES.map(t => (
-                <button key={t.id} onClick={() => toggleType(t.id)}
-                  className={`rounded-full px-2.5 py-0.5 text-xs font-medium border transition-colors ${
-                    assetTypes.includes(t.id)
-                      ? 'bg-indigo-600 border-indigo-600 text-white'
-                      : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:border-indigo-400'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-              {assetTypes.length > 0 && (
-                <button onClick={() => setAssetTypes([])} className="text-xs text-gray-400 underline ml-1">clear</button>
-              )}
-            </CardContent>
-          </Card>
+        <aside className="w-68 shrink-0 space-y-4">
 
           <Card>
             <CardHeader>
@@ -295,7 +403,7 @@ export default function BacktestPage() {
                 </label>
               </div>
             </CardHeader>
-            <CardContent className="space-y-0.5 max-h-60 overflow-y-auto pr-1">
+            <CardContent className="space-y-0.5 max-h-64 overflow-y-auto pr-1">
               {STRATEGIES.map(s => (
                 <label key={s.id} className={`flex items-start gap-2 cursor-pointer rounded-md px-2 py-1.5 transition-colors ${
                   strategyId === s.id && !compareMode ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
@@ -336,29 +444,34 @@ export default function BacktestPage() {
           )}
 
           <Card>
+            <CardHeader>
+              <CardTitle className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Backtest Period
+                <span className="ml-1 font-normal normal-case text-gray-400">(trading days)</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex gap-1.5 flex-wrap">
+              {LOOKBACK_OPTIONS.map(opt => (
+                <button key={opt.days} data-testid={`horizon-${opt.days}`}
+                  onClick={() => setHorizon(opt.days)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    horizon === opt.days
+                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}>
+                  {opt.label}
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
             <CardHeader><CardTitle className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Capital (USD)</CardTitle></CardHeader>
             <CardContent>
               <input type="number" min={10000} max={10000000} step={10000} value={capital}
                 onChange={e => setCapital(+e.target.value)}
                 className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white"
               />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Horizon</CardTitle></CardHeader>
-            <CardContent className="flex gap-2 flex-wrap">
-              {[30, 90, 180, 365, 730].map(d => (
-                <button key={d} onClick={() => setHorizon(d)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                    horizon === d
-                      ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {d >= 365 ? `${d / 365}y` : `${d}d`}
-                </button>
-              ))}
             </CardContent>
           </Card>
 
@@ -399,7 +512,7 @@ export default function BacktestPage() {
                 <CardTitle>Equity Curve — NAV (Base 100)</CardTitle>
                 {singleRun && (
                   <span className="text-xs text-gray-500 dark:text-gray-400">
-                    {singleRun.result.assets.length} instruments · {universe}
+                    {(singleRun.result.universe_size ?? singleRun.result.assets.length).toLocaleString()} instruments · {universe}
                   </span>
                 )}
               </div>
@@ -464,6 +577,8 @@ export default function BacktestPage() {
                         <th className="py-2 pr-3 text-right">Vol</th>
                         <th className="py-2 pr-3 text-right">Win%</th>
                         <th className="py-2 pr-3 text-right">ES 95%</th>
+                        <th className="py-2 pr-3 text-right">Jump VaR</th>
+                        <th className="py-2 pr-3 text-right">Jump %</th>
                         <th className="py-2 text-right">Turnover</th>
                       </tr>
                     </thead>
@@ -483,6 +598,12 @@ export default function BacktestPage() {
                             <td className="py-2.5 pr-3 text-right font-mono text-gray-700 dark:text-gray-300">{pct(m.volatility)}</td>
                             <td className="py-2.5 pr-3 text-right font-mono text-gray-700 dark:text-gray-300">{pct(m.win_rate)}</td>
                             <td className="py-2.5 pr-3 text-right font-mono text-amber-500">{pct(m.es95)}</td>
+                            <td className="py-2.5 pr-3 text-right font-mono text-orange-500" title="1-day 95% VaR adjusted for jump-diffusion decomposition (arXiv:1803.07021)">
+                              {m.jump_var_95 != null ? pct(m.jump_var_95) : '—'}
+                            </td>
+                            <td className="py-2.5 pr-3 text-right font-mono text-purple-500" title="Fraction of total variance from jump events (Poisson λ-weighted)">
+                              {m.jump_variance_fraction != null ? pct(m.jump_variance_fraction, 0) : '—'}
+                            </td>
                             <td className="py-2.5 text-right font-mono text-gray-700 dark:text-gray-300">{m.turnover.toFixed(1)}x</td>
                           </tr>
                         )
@@ -496,7 +617,16 @@ export default function BacktestPage() {
 
           {singleRun && (
             <Card>
-              <CardHeader><CardTitle>Asset Universe ({singleRun.result.assets.length} instruments)</CardTitle></CardHeader>
+              <CardHeader>
+                <CardTitle>
+                  Asset Universe
+                  {(singleRun.result.universe_size ?? 0) > singleRun.result.assets.length && (
+                    <span className="ml-2 text-xs font-normal text-gray-400 dark:text-gray-500">
+                      showing {singleRun.result.assets.length} of {(singleRun.result.universe_size ?? singleRun.result.assets.length).toLocaleString()} instruments
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-2">
                   {singleRun.result.assets.map(a => (

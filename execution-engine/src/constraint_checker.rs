@@ -16,6 +16,11 @@ impl ConstraintChecker {
         constraints: &ExecutionConstraints,
         risk_components: &StateComponents,
     ) -> Result<()> {
+        // 0. Portfolio size sanity check
+        if portfolio.total_value_usd <= 0.0 {
+            return Err(anyhow!("Portfolio value must be positive"));
+        }
+
         // 1. Slippage check
         if constraints.max_slippage_bps < 10 {
             return Err(anyhow!("Slippage constraint too tight"));

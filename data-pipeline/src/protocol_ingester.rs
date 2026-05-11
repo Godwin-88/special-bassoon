@@ -132,6 +132,10 @@ impl ProtocolIngester {
         if let Ok(ov) = fees_res {
             for p in ov.protocols.unwrap_or_default() {
                 let key = p.slug.clone().or_else(|| p.name.clone()).unwrap_or_default().to_lowercase();
+                let _fee_total_30d = p.total30d.unwrap_or(0.0);
+                if _fee_total_30d > 0.0 {
+                    info!("Protocol {} 30d fee total = {}", key, _fee_total_30d);
+                }
                 fees_map.entry(key).or_insert(p);
             }
         }
@@ -237,6 +241,12 @@ impl ProtocolIngester {
             ).unwrap_or_default();
 
             for chain in &chains {
+                if let Some(key) = &chain.key {
+                    info!("LI.FI chain key {} for {}", key, chain.name.clone().unwrap_or_default());
+                }
+            }
+
+            for chain in &chains {
                 let name = chain.name.clone().unwrap_or_default();
                 if name.is_empty() { continue; }
                 if let Err(e) = self.graph.upsert_chain(&name).await {
@@ -251,6 +261,9 @@ impl ProtocolIngester {
             for bridge in &bridges {
                 let name = bridge.name.clone().unwrap_or_default();
                 if name.is_empty() { continue; }
+                if let Some(key) = &bridge.key {
+                    info!("LI.FI bridge key {} for {}", key, name);
+                }
                 let supported: Vec<String> = bridge.supported_chains.clone().unwrap_or_default();
                 if let Err(e) = self.graph.upsert_bridge(&name, &supported).await {
                     warn!("Failed to upsert bridge {}: {}", name, e);
@@ -263,11 +276,15 @@ impl ProtocolIngester {
     }
 
     async fn fetch_json<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let resp = self.client
+        let mut req = self.client
             .get(url)
-            .header("Accept", "application/json")
-            .send()
-            .await?;
+            .header("Accept", "application/json");
+
+        if url.contains("li.quest") && !self.lifi_key.is_empty() {
+            req = req.header("x-api-key", self.lifi_key.clone());
+        }
+
+        let resp = req.send().await?;
         if !resp.status().is_success() {
             anyhow::bail!("{} → {}", url, resp.status());
         }
